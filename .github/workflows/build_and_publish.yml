@@ -1,0 +1,47 @@
+name: Build and upload
+
+on:
+  push:
+    branches: [ "master" ]
+
+env:
+  PROJECT_ID: '${{ secrets.GCLOUD_PROJECT_ID }}'
+  GAR_LOCATION: '${{ secrets.GCLOUD_GAR_LOCATION }}'
+  REGION: '${{ secrets.GCLOUD_REGION }}'
+  IMAGE_NAME: '${{ secrets.IMAGE_NAME }}'
+
+jobs:
+
+  build:
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v0'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      # Authenticate Docker to Google Cloud Artifact Registry
+      - name: Docker Auth
+        id: docker-auth
+        uses: 'docker/login-action@v2'
+        with:
+          username: '_json_key'
+          password: '${{ secrets.GCP_CREDENTIALS }}'
+          registry: '${{ env.GAR_LOCATION }}'
+
+      - name: Build and Push Container
+        run: |-
+          docker build -t "${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" ./
+          docker tag "${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" "${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest"
+          docker push "${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          docker push "${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest"
+
+      # END - Docker auth and build
